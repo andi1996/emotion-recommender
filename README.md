@@ -13,6 +13,7 @@ To begin, run `pip install -r requirements.txt --upgrade` once before the first 
 ## How to run the project
 
 (1) Run `python app.py`
+
 (2) Open `index.html`
 
 All used files can be found in the folder `static`.
