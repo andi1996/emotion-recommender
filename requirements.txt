@@ -1,0 +1,7 @@
+requests
+clarifai
+numpy
+scipy
+scikit-learn
+flask
+flask_cors

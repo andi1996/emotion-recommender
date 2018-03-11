@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+	<title>RecSys</title>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" /> <!-- symbols -->
+	<script src="http://code.jquery.com/jquery-3.3.1.min.js"></script> <!-- jQuery -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css" /> <!-- Leaflet -->
+	<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+	<link rel="stylesheet" href="static/leaflet-sidebar.css" /> <!-- Leaflet sidebar -->
+	<script src="static/leaflet-sidebar.js"></script>
+	<!-- <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+	<script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script> -->
+	<!-- <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.css" />
+	<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.3.0/dist/MarkerCluster.Default.css" />
+	<script src="https://unpkg.com/leaflet.markercluster@1.3.0/dist/leaflet.markercluster.js" /> -->
+    <style>html, body {width: 100%; height: 100%; margin: 0; padding: 0; font: 13pt Arial;}</style>
+	<style>#map {position: relative; width: 100.0%; height: 100.0%; left: 0.0%; top: 0.0%;}</style>
+</head>
+<body>
+    <div id="sidebar" class="sidebar collapsed">
+        <div class="sidebar-tabs">
+            <ul role="tablist">
+				<li><a href="#info" role="tab"><i class="fa fa-info"></i></a></li>
+                <li><a href="#home" role="tab"><i class="fa fa-play"></i></a></li>
+				<li><a href="#recs" role="tab"><i class="fa fa-location-arrow"></i></a></li>
+            </ul>
+        </div>
+        <div class="sidebar-content">
+			<div class="sidebar-pane" id="info">
+				<h1 class="sidebar-header">Information<span class="sidebar-close"><i class="fa fa-caret-left"></i></span></h1>
+				<p>Welcome! This system generates recommendations for places to visit based on emotions. In the following you will be shown three such recommendations. You are guided step by step through the usage of the system.</p>
+				<p>Choose the location for which you want to get recommendations (imagine being there and looking for possible places to visit) by dragging the blue marker to the desired position. The map can be freely moved and zoomed. The <span style="color:red;">red</span> circles are possible recommendations. Now click in the bar left on <i class="fa fa-play"></i>.</p>
+			</div>
+            <div class="sidebar-pane" id="home">
+                <h1 class="sidebar-header">Recommender System<span class="sidebar-close"><i class="fa fa-caret-left"></i></span></h1>
+				<p>Choose your current emotion by clicking in the graphic below. You can click on any point of the graphic. The further to the right, the more positive you feel; the further to the top, the more active you feel. As an orientation, some example emotions are shown in the graphic.</p>
+				<p><b>Current position:</b> <span id="gpsPos"></span></p>
+				<canvas id="myCanvas" width="399" height="398" style="border:1px solid #000000;background: url('static/emotions.png')" onmousemove="showStats(event)" onmousedown="savePAandDraw(event)"></canvas>
+				<div id="stats" style="font-size:10pt">Mouse coordinates: (x,x), Pleasure xx.xx%, Activity xx.xx%</div>
+				<div id="paValues">Selected levels: Pleasure 50.00%, Activity 50.00%</div>
+				<!-- <div class="slidecontainer" style="float:left">
+					<input type="range" min="1" max="3" value="2" class="slider" id="pSlider" step="0.005">
+					<p>Pleasure: <span id="pSliderV"></span></p>
+				</div>
+				<div class="slidecontainer">
+					<input type="range" min="1" max="3" value="2" class="slider" id="aSlider" step="0.005">
+					<p>Activity: <span id="aSliderV"></span></p>
+				</div> -->
+				<p>Choose the picture database you want to use, or create your own by clicking <a id="link" href="#" onclick="flickr();">here</a>.</p>
+				<form action="">
+					<input type="radio" name="file" value="local" onclick="drawMarkers('local.csv')" checked> local.csv
+					<input type="radio" name="file" value="flickr" onclick="drawMarkers('flickr.csv')"> flickr.csv
+				</form>
+				<p>Click one of the buttons and then in the bar left on <i class="fa fa-location-arrow"></i>.</p>
+				<button type="button" onclick="recommend(false);">Recommend places by emotion</button>
+				<button type="button" onclick="recommend(true);">Recommend places randomly</button>
+			</div>
+			<div class="sidebar-pane" id="recs">
+				<h1 class="sidebar-header">Recommendations<span class="sidebar-close"><i class="fa fa-caret-left"></i></span></h1>
+				<p>Look at the three recommendations by scrolling down. In the map, the 50 closest places are marked with <span style="background:yellow;">yellow</span> circles, and the three recommended places with <span style="color:blue;">blue</span> circles.</p>
+				<p><b>Recommendation 1:</b><span id="desc1"></span></p>
+				<img src="static/empty.png" alt="Recommendation 1" width="auto" height="auto" style="max-width:400px;max-height:400px" id="rec1">
+				<p><b>Recommendation 2:</b><span id="desc2"></span></p>
+				<img src="static/empty.png" alt="Recommendation 2" width="auto" height="auto" style="max-width:400px;max-height:400px" id="rec2">
+				<p><b>Recommendation 3:</b><span id="desc3"></span></p>
+				<img src="static/empty.png" alt="Recommendation 3" width="auto" height="auto" style="max-width:400px;max-height:400px" id="rec3">
+			</div>
+		</div>
+	</div>
+	<div id="map" class="sidebar-map"></div>
+</body>
+<script>
+	//starting position
+	var startLat = 48.137079; //Marienplatz, Munich		60.167665; //Kauppatori, Helsinki
+	var startLng = 11.576006; //Marienplatz, Munich		24.953678; //Kauppatori, Helsinki
+	//set and show current position
+	var position = [startLat, startLng];
+	position.lat = startLat;
+	position.lng = startLng;
+	document.getElementById("gpsPos").innerHTML = position.lat + ", " + position.lng;
+	
+	//map, sidebar, layers, draggable marker
+    var map = L.map("map", {center: position, zoom: 4}); //preferCanvas: true
+	var sidebar = L.control.sidebar("sidebar").addTo(map);
+    var osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: null, maxZoom: 18}).addTo(map);
+	//var transportLayer = L.tileLayer("http://www.openptmap.org/tiles/{z}/{x}/{y}.png", {maxZoom: 18, minZoom: 9}).addTo(map);
+	var marker = L.marker(position, {draggable: true}).addTo(map);
+	
+	//update, round and show new position when marker is dragged
+    marker.on("dragend", function(e) {
+        position = e.target.getLatLng();
+		position.lat = position.lat.toFixed(6);
+		position.lng = position.lng.toFixed(6);
+		document.getElementById("gpsPos").innerHTML = position.lat + ", " + position.lng;
+    });
+	
+	/*//example popup showing up when map is clicked
+	var popup = L.popup();
+	function onMapClick(e) {
+		popup.setLatLng(e.latlng).setContent("You clicked the map at " + e.latlng.toString()).openOn(map);
+	}
+	map.on("click", onMapClick);*/
+	
+	var file = ""; //picture database name
+	var prefix = ""; //prefix for picture location
+	var lines = ""; //file content
+	var picMarkerGroup = L.layerGroup().addTo(map); //pictures //L.markerClusterGroup()
+	var recMarkerGroup = L.layerGroup().addTo(map); //recommendations
+	//show markers for each picture from database
+	function drawMarkers(selectedFile) {
+		file = selectedFile;
+		if (file == "local.csv") {
+			prefix = "img/"; //pictures stored locally
+		}
+		else {
+			prefix = ""; //pictures stored remotely
+		}
+		picMarkerGroup.clearLayers();
+		recMarkerGroup.clearLayers();
+		var markers = null;
+		jQuery.get("http://localhost:5000/getFile?file="+file, function(data) {
+			lines = data.split("\n"); //each line of the picture database represents a picture
+			for (var i = 0; i < lines.length; i++) {
+				var line = lines[i].split(","); //split into attributes; add to array with push()
+				markers = new L.circleMarker([line[3],line[4]],{color: "red",}).bindPopup("<img src='"+prefix+line[0]+"' style='max-width:400px;max-height:400px;'>",{maxWidth:500}).addTo(picMarkerGroup); //red marker added for each picture; not L.marker due to performance //.openPopup()
+			}
+		});
+	}
+	drawMarkers("local.csv"); //draw markers from local file as default
+	
+	/*//set and show pleasure value of slider
+	var sliderP = document.getElementById("pSlider");
+	var outputP = document.getElementById("pSliderV");
+	outputP.innerHTML = sliderP.value;
+	//show new slider value when dragging
+	sliderP.oninput = function() {
+		outputP.innerHTML = this.value;
+	}
+	//set and show activity value of slider
+	var sliderA = document.getElementById("aSlider");
+	var outputA = document.getElementById("aSliderV");
+	outputA.innerHTML = sliderA.value;
+	//show new slider value when dragging
+	sliderA.oninput = function() {
+		outputA.innerHTML = this.value;
+	}*/
+	
+	var pV = 2; //default shown pleasure value
+	var aV = 2; //default shown activity value
+	var pleasure = 2; //default saved pleasure value
+	var activity = 2; //default saved activity value
+	//update pV and aV when mouse is moved in canvas
+	function showStats(e) {
+		var x = e.offsetX+1; //mouse coordinates
+		var y = e.offsetY+2;
+		pV = (x*0.005)+1; //calculation and rounding of shown pleasure value
+		pV = pV.toFixed(3);
+		aV = 3-(y*0.005); //calculation and rounding of shown activity value
+		aV = aV.toFixed(3);
+		document.getElementById("stats").innerHTML = "Mouse coordinates: (" + x + "," + y + "), Pleasure " + ((pV-1)*50).toFixed(2) + "\%, Activity " + ((aV-1)*50).toFixed(2) + "\%"; //+ ", Pleasure value " + pV + ", Activity value " + aV; //+","+e.pageX+","+e.pageY+","+e.clientX+","+e.clientY+","+e.screenX+","+e.screenY;
+	}
+
+	//update pleasure and activity when mouse is clicked in canvas, draw black dot
+	function savePAandDraw(e) {
+		/*document.getElementById("pSlider").value = pV;
+		document.getElementById("aSlider").value = aV;
+		document.getElementById("pSliderV").innerHTML = pV;
+		document.getElementById("aSliderV").innerHTML = aV;*/
+		pleasure = pV;
+		activity = aV;
+		document.getElementById("paValues").innerHTML = "Selected levels: Pleasure " + ((pV-1)*50).toFixed(2) + "\%, Activity " + ((aV-1)*50).toFixed(2) + "\%";
+		var c = document.getElementById("myCanvas");
+		var ctx = c.getContext("2d"); //var emo = new Image(); emo.src = "emotions.png"; ctx.drawImage(emo,0,0,emo.width,emo.height,0,0,c.width,c.height);
+		ctx.clearRect(0, 0, c.width, c.height);
+		ctx.beginPath();
+		ctx.arc(e.offsetX,e.offsetY,5,0,2*Math.PI);
+		ctx.fill();
+		ctx.closePath();
+	}
+	
+	//call Python backend: create own Flickr picture database at marker location
+	function flickr() {
+		$.ajax({
+			type: "GET",
+			url: "http://localhost:5000/xml?lat="+position.lat.toString()+"&lng="+position.lng.toString(),
+			success: function(response) {alert(response);},
+			error: function(response) {console.error(response);}
+		});
+	}
+
+	//call Python backend: calculate recommendations at marker location for chosen emotion (pleasure and activity values) and picture database, real or random
+	function recommend(rand) {
+		$.ajax({
+			type: "GET",
+			url: "http://localhost:5000/rec?lat="+position.lat.toString()+"&lng="+position.lng.toString()+"&p="+pleasure+"&a="+activity+"&file=static/"+file+"&rand="+rand,
+			success: function(response) {
+				recMarkerGroup.clearLayers();
+				var results = response.split("..."); //split into results
+				//close pictures
+				var resultsA = results[0].split(" "); //split into indices
+				for (var i = 0; i < resultsA.length; i++) {
+					var line = lines[resultsA[i]].split(","); //split into attributes
+					markers = new L.circleMarker([line[3],line[4]],{color: "yellow",}).bindPopup("<img src='"+prefix+line[0]+"' style='max-width:400px;max-height:400px;'>",{maxWidth:500}).addTo(recMarkerGroup); //yellow marker added for each close picture
+				}
+				//recommended pictures
+				var resultsB = results[1].split("\n"); //split into infos
+				var recsArray = [];
+				var markersArray = [];
+				var picsArray = [];
+				var stringArray = [];
+				var descrArray = [];
+				var index = 0;
+				for (var i = index; i < index+3; i++) {
+					recsArray[i] = resultsB[i-index].split(","); //split into attributes
+					markersArray[i] = new L.circleMarker([recsArray[i][3],recsArray[i][4]]).bindPopup("<img src='"+prefix+recsArray[i][0]+"' style='max-width:400px;max-height:400px;'>",{maxWidth:500}).addTo(recMarkerGroup); //blue marker added for each recommended picture
+					picsArray[i] = document.getElementById("rec"+(i+1));
+					picsArray[i].src = prefix+recsArray[i][0]; //show recommended pictures
+					stringArray[i] = "<br><b>source:</b> "+recsArray[i][0]+"<br><b>date taken:</b> "+recsArray[i][1]+"<br><b>time taken:</b> "+recsArray[i][2]+"<br><b>latitude:</b> "+recsArray[i][3]+"<br><b>longitude:</b> "+recsArray[i][4]+"<br><b>contents:</b> "+recsArray[i].slice(5,15).join();//+"<br><b>pleasure:</b> "+recsArray[i][15]+"<br><b>activity:</b> "+recsArray[i][16]+"<br><b>emotion:</b> "+recsArray[i][17];
+					descrArray[i] = document.getElementById("desc"+(i+1));
+					descrArray[i].innerHTML = stringArray[i]; //show infos about recommended pictures
+				}
+				var polyline = L.polyline([marker.getLatLng(),markersArray[index+0].getLatLng(),markersArray[index+1].getLatLng(),markersArray[index+2].getLatLng()], {color: "blue"}).addTo(recMarkerGroup); //connect position and recommendations with blue line //L.polygon
+				map.flyTo(position, 16, {animate:false});
+				//L.Routing.control({waypoints: [marker.getLatLng(),markersArray[index+0].getLatLng(),markersArray[index+1].getLatLng(),markersArray[index+2].getLatLng()]}).addTo(map); //show route between recommendations
+			},
+			error: function(response) {console.error(response);}
+		});
+	}
+</script>
